@@ -315,7 +315,7 @@ async def log_edit(before_data, after: disnake.Message):
     after_text = _clip(after.content or "", 1000) or "*[без текста]*"
     if before_text == after_text: return
 
-    embed = disnake.Embed(title="✏️ Відредаговане повідомлення", color=disnake.Color.orange(), timestamp=now_utc())
+    embed = disnake.Embed(title="Відредаговане повідомлення", color=disnake.Color.orange(), timestamp=now_utc())
     embed.add_field(name="Автор", value=f"{after.author.mention}\n`{after.author.id}`", inline=False)
     embed.add_field(name="Канал", value=channel_display(after.channel), inline=False)
     embed.add_field(name="Було", value=before_text, inline=False)

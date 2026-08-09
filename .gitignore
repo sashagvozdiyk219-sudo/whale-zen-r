@@ -1,0 +1,19 @@
+# Секреты и ключи
+.env
+
+# Базы данных и файлы состояний
+data/
+bot_state.json
+users_profile.json
+
+# Системные файлы и кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+.vscode/
+.idea/
+
+# Виртуальное окружение
+venv/
+env/
+ENV/

@@ -585,7 +585,7 @@ class ComplaintModal(disnake.ui.Modal):
         save_state(STATE)
         await msg.edit(view=build_case_view(msg.id))
         await inter.response.send_message("Створено", ephemeral=True)
-        # REACTION ROLE HANDLER
+  # REACTION ROLE HANDLER
 async def handle_reaction(payload, add: bool):
     guild = bot.get_guild(payload.guild_id)
     if not guild or payload.message_id != ROLE_PANEL_MESSAGE_ID: return
@@ -599,7 +599,9 @@ async def handle_reaction(payload, add: bool):
 
     try:
         if add:
-            if has_role(member, BLOCK_ROLE_ID) and role_id in {1463646838241624186, 1457534795532996628, 1470140921218859235}: return
+            # Запрещаем выдачу любой NSFW-роли, если у пользователя есть Minor или BLOCK_ROLE
+            if (has_role(member, MINOR_ROLE_ID) or has_role(member, BLOCK_ROLE_ID)) and role_id in NSFW_ROLE_IDS:
+                return
             await member.add_roles(role)
         else:
             await member.remove_roles(role)

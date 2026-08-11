@@ -789,7 +789,7 @@ async def on_message(message: disnake.Message):
     if is_ignored_channel(message.channel): return
 
     cache_message(message)
-    add_user_xp(str(message.author.id), 15)
+    add_user_xp(str(message.author.id), 50)
 
     content_lower = (message.content or "").lower()
     if any(word in content_lower for word in BAD_WORDS):

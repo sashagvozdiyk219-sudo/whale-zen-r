@@ -13,13 +13,6 @@ from disnake.ext import commands
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# Вспомогательный модуль правил (если присутствует в проекте)
-try:
-    from rules_engine import build_languages, RulesView
-except ImportError:
-    build_languages = None
-    RulesView = None
-
 # FIX для asyncio петель
 try:
     asyncio.get_running_loop()
@@ -41,9 +34,8 @@ BAN_LOG_CHANNEL_ID = 1430109571317235813
 MUTE_LOG_CHANNEL_ID = 1477964449355665479
 WARN_LOG_CHANNEL_ID = 1481819684125806673
 
-# Роли и Каналы системы тикетов, панелей и стартовой выдачи
+# Каналы и панели
 COMPLAINTS_CHANNEL_ID = 1463712939692527710
-APPEALS_CHANNEL_ID = 1463712648934985799
 ROLES_DASHBOARD_CHANNEL_ID = 1474940159740088492
 ROLE_PANEL_CHANNEL_ID = 1463680824325967938
 ROLE_PANEL_MESSAGE_ID = 1487929795667824751
@@ -57,7 +49,6 @@ MUTE_ROLE_IDS = [1463676866857664663, 1429300139930947805, 1463733343689375927, 
 BAN_ROLE_IDS = [1429300139930947805, 1463676866857664663]
 WARN_ROLE_IDS = [1429300139930947805, 1463676866857664663]
 PROTECTED_ROLE_IDS = [1463676866857664663, 1429301055774134404, 1463661840083980288, 1457909630528262185]
-ALLOWED_RELOAD_ROLES = [1429301055774134404, 1429300518920126514]
 
 OWNER_ROLE_ID = 1429301055774134404  
 HRN_ROLE_ID = 1429300518920126514
@@ -68,7 +59,6 @@ EVENTER_ROLE_ID = 1463733343689375927
 
 DASHBOARD_ROLE_IDS = [OWNER_ROLE_ID, HRN_ROLE_ID, MANAGER_ROLE_ID, HEAD_MODERATOR_ROLE_ID, MODERATOR_ROLE_ID, EVENTER_ROLE_ID]
 COMPLAINT_PING_ROLE_IDS = [MODERATOR_ROLE_ID]
-APPEAL_PING_ROLE_IDS = [MANAGER_ROLE_ID]
 STAFF_ACTION_ROLE_IDS = DASHBOARD_ROLE_IDS
 
 THREAD_AUTO_ARCHIVE_MINUTES = 4320
@@ -100,22 +90,16 @@ REACTION_ROLE_TEXT = {
 
 WELCOME_TEXTS = {
     "uk": "Привіт, {mention}! Тобі точно сподобається у **Whale Zen**. Ми створили затишний куточок без токсичності для фанатів аніме та ігор. Заходь ділитися контентом, шукати однодумців та просто спілкуватися про своє. Чекаємо саме на тебе!",
-    "en": "Hello, {mention}! You'll definitely like it at **Whale Zen**. We created a cozy corner without toxicity for fans of anime and games. Join us to share content, find like-minded people, and just chat about yours. We are waiting for you!",
-    "ru": "Привет, {mention}! Тебе точно понравится в **Whale Zen**. Мы создали уютный угол без токсичности для фанатов аниме и игр. Заходи делиться контентом, искать единомышленников и просто общаться о своём. Ждём именно тебя!"
 }
 
-# =========================================================
-# BOT INITIALIZATION & INTENTS
-# =========================================================
+# BOT INITIALIZATION
 intents = disnake.Intents.all()
 bot = commands.InteractionBot(
     intents=intents,
     test_guilds=[GUILD_ID]
 )
 
-# =========================================================
-# STATE & DATA STORAGE MANAGERS
-# =========================================================
+# STATE MANAGEMENT
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -123,7 +107,6 @@ WARNS_FILE = DATA_DIR / "warns.json"
 TEMP_BANS_FILE = DATA_DIR / "temp_bans.json"
 TEMP_MUTES_FILE = DATA_DIR / "temp_mutes.json"
 STATE_FILE = Path("bot_state.json")
-RULES_CONFIG_FILE = "config_rules.json"
 WELCOME_CONFIG_FILE = "config_welcome.json"
 PROFILE_DATA_FILE = "users_profile.json"
 
@@ -135,20 +118,15 @@ MESSAGE_CACHE: dict[int, dict] = {}
 _bg_started = False
 
 def _load_json(path: Path, default):
-    if not path.exists():
-        return default
+    if not path.exists(): return default
     try:
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
+        with path.open("r", encoding="utf-8") as f: return json.load(f)
+    except Exception: return default
 
 def _save_json(path: Path, data):
     try:
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"[DATA] save {path.name} failed: {type(e).__name__}: {e}")
+        with path.open("w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e: print(f"[DATA] save {path.name} failed: {type(e).__name__}: {e}")
 
 def load_state():
     global badword_tracker, temp_bans, temp_mutes
@@ -156,12 +134,9 @@ def load_state():
     temp_bans = {int(k): v for k, v in _load_json(TEMP_BANS_FILE, {}).items()}
     temp_mutes = {int(k): v for k, v in _load_json(TEMP_MUTES_FILE, {}).items()}
 
-    if not STATE_FILE.exists():
-        return {"cases": {}, "dashboards": {}, "role_panel": {}}
-    try:
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {"cases": {}, "dashboards": {}, "role_panel": {}}
+    if not STATE_FILE.exists(): return {"cases": {}, "dashboards": {}, "role_panel": {}}
+    try: return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except Exception: return {"cases": {}, "dashboards": {}, "role_panel": {}}
 
 def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -172,36 +147,22 @@ def save_warns(): _save_json(WARNS_FILE, {str(k): v for k, v in badword_tracker.
 def save_temp_bans(): _save_json(TEMP_BANS_FILE, {str(k): v for k, v in temp_bans.items()})
 def save_temp_mutes(): _save_json(TEMP_MUTES_FILE, {str(k): v for k, v in temp_mutes.items()})
 
-def load_rules_config():
-    if not os.path.exists(RULES_CONFIG_FILE): return {}
-    with open(RULES_CONFIG_FILE, "r", encoding="utf-8") as f: return json.load(f)
-
-def save_rules_config(data):
-    with open(RULES_CONFIG_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-
 def load_welcome_config():
     if not os.path.exists(WELCOME_CONFIG_FILE): return {}
     with open(WELCOME_CONFIG_FILE, "r", encoding="utf-8") as f: return json.load(f)
 
 def load_profile_data():
-    if not os.path.exists(PROFILE_DATA_FILE):
-        data = {}
+    if not os.path.exists(PROFILE_DATA_FILE): data = {}
     else:
         with open(PROFILE_DATA_FILE, "r", encoding="utf-8") as f:
             try: data = json.load(f)
             except json.JSONDecodeError: data = {}
-    target_id = "617822466017853453"
-    if target_id not in data or data[target_id].get("level", 1) < 100:
-        data[target_id] = {"xp": 0, "level": 100}
-        save_profile_data(data)
     return data
 
 def save_profile_data(data):
     with open(PROFILE_DATA_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-# =========================================================
-# UTILITIES & PERMISSIONS
-# =========================================================
+# UTILITIES
 def now_utc() -> datetime: return datetime.now(timezone.utc)
 def utc_ts() -> float: return time.time()
 def fmt_until_from_ts(ts: float) -> str: return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
@@ -248,9 +209,7 @@ def channel_display(channel) -> str:
         parent = f" / {channel.parent.mention}" if channel.parent else ""
         return f"{channel.mention}{parent}\n`{channel.id}`"
     return f"{getattr(channel, 'mention', str(channel))}\n`{getattr(channel, 'id', 'unknown')}`"
-  # =========================================================
-# LOGGING & LOG EMBEDS
-# =========================================================
+    # LOGGING
 async def _get_text_channel(channel_id: int, guild: disnake.Guild) -> disnake.TextChannel | disnake.Thread | None:
     cached = guild.get_channel(channel_id)
     if isinstance(cached, (disnake.TextChannel, disnake.Thread)): return cached
@@ -325,9 +284,7 @@ async def log_edit(before_data, after: disnake.Message):
     except Exception: pass
     await log_message_event(after.guild, embed)
 
-# =========================================================
-# IMAGE GENERATION LOGIC (PILLOW)
-# =========================================================
+# IMAGE GENERATION LOGIC
 def get_safe_font(font_path, size):
     if font_path and os.path.exists(font_path):
         try: return ImageFont.truetype(font_path, size)
@@ -338,6 +295,7 @@ def get_safe_font(font_path, size):
         except IOError: continue
     return ImageFont.load_default()
 
+# ОБНОВЛЕННЫЙ ШАГ ОПЫТА: 150 * lvl + 100
 def calculate_xp_for_next_level(level): return 100 + (level * 150)
 
 def add_user_xp(user_id: str, amount: int):
@@ -345,7 +303,6 @@ def add_user_xp(user_id: str, amount: int):
     if user_id not in profiles: profiles[user_id] = {"xp": 0, "level": 1}
     profiles[user_id]["xp"] += amount
     
-    # Предохранитель итераций против зацикливания
     iterations = 0
     while iterations < 1000:
         current_xp = profiles[user_id]["xp"]
@@ -519,9 +476,7 @@ async def generate_leaderboard_image(guild: disnake.Guild, top_users):
     image_bytes.seek(0)
     return disnake.File(image_bytes, filename="leaderboard.png")
 
-# =========================================================
-# UI VIEWS & MODALS (PERSISTENT BUTTONS & TICKETS)
-# =========================================================
+# UI VIEWS & MODALS
 class UnbanView(disnake.ui.View):
     def __init__(self): super().__init__(timeout=None)
     @disnake.ui.button(label="Розблокувати", style=disnake.ButtonStyle.danger, custom_id="unban_button_persistent")
@@ -621,53 +576,13 @@ class ComplaintModal(disnake.ui.Modal):
             "Час": self.text_values["time"], "Опис": self.text_values["desc"]
         })
         msg = await ch.send(content=f"🔔 **Нове звернення:** {pings}", embed=embed)
-        thread = await msg.create_thread(name=f"Скарга #{msg.id}")
+        thread = await msg.create_thread(name=f"Скарга #{msg.id}", auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES)
         await thread.send("❦ Додайте докази тут")
         STATE["cases"][str(msg.id)] = {"status": "open", "thread": thread.id}
         save_state(STATE)
         await msg.edit(view=build_case_view(msg.id))
         await inter.response.send_message("Створено", ephemeral=True)
-
-class AppealModal(disnake.ui.Modal):
-    def __init__(self):
-        super().__init__(title="Апеляція", components=[
-            disnake.ui.TextInput(label="Хто апелює", custom_id="user"),
-            disnake.ui.TextInput(label="Причина покарання", custom_id="rule"),
-            disnake.ui.TextInput(label="Час покарання", custom_id="time"),
-            disnake.ui.TextInput(label="Опис", custom_id="desc", style=disnake.TextInputStyle.paragraph),
-        ])
-    async def callback(self, inter):
-        ch = inter.guild.get_channel(APPEALS_CHANNEL_ID)
-        pings = " ".join([f"<@&{r}>" for r in APPEAL_PING_ROLE_IDS])
-        embed = build_embed(inter, "Апеляція", {
-            "Користувач": self.text_values["user"], "Причина": self.text_values["rule"],
-            "Час": self.text_values["time"], "Опис": self.text_values["desc"]
-        })
-        msg = await ch.send(content=f"🔔 **Нова апеляція:** {pings}", embed=embed)
-        thread = await msg.create_thread(name=f"Апеляція #{msg.id}", auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES)
-        await thread.send("📎 Додайте докази тут")
-        STATE["cases"][str(msg.id)] = {"status": "open", "thread": thread.id}
-        save_state(STATE)
-        await msg.edit(view=build_case_view(msg.id))
-        await inter.response.send_message("Апеляцію створено", ephemeral=True)
-
-class TicketSelect(disnake.ui.Select):
-    def __init__(self):
-        super().__init__(options=[
-            disnake.SelectOption(label="Скарга", value="c"),
-            disnake.SelectOption(label="Апеляція", value="a")
-        ])
-    async def callback(self, inter: disnake.MessageInteraction):
-        if self.values[0] == "c": await inter.response.send_modal(ComplaintModal())
-        else: await inter.response.send_modal(AppealModal())
-
-class TicketView(disnake.ui.View):
-    def __init__(self):
-        super().__init__()
-        self.add_item(TicketSelect())
-      # =========================================================
-# REACTION ROLE HANDLER (ИСПРАВЛЕН ПОРЯДОК ОБЪЯВЛЕНИЯ)
-# =========================================================
+        # REACTION ROLE HANDLER
 async def handle_reaction(payload, add: bool):
     guild = bot.get_guild(payload.guild_id)
     if not guild or payload.message_id != ROLE_PANEL_MESSAGE_ID: return
@@ -692,9 +607,7 @@ async def on_raw_reaction_add(payload): await handle_reaction(payload, add=True)
 @bot.event
 async def on_raw_reaction_remove(payload): await handle_reaction(payload, add=False)
 
-# =========================================================
 # AUTOMOD & WARN SYSTEM
-# =========================================================
 def make_ban_embed(member: disnake.Member, moderator: disnake.Member, hours: int, rule: str) -> disnake.Embed:
     ends_str = fmt_until_from_ts(utc_ts() + hours * 3600)
     embed = disnake.Embed(title="꧁⎝ 𓆩༺✧༻𓆪 ⎠꧂", color=disnake.Color.red(), timestamp=now_utc())
@@ -761,9 +674,7 @@ async def apply_warn(guild: disnake.Guild, member: disnake.Member, moderator: di
         temp_mutes[member.id] = {"guild_id": guild.id, "end_ts": end_ts, "log_message_id": mute_msg.id if mute_msg else None, "log_channel_id": MUTE_LOG_CHANNEL_ID}
         save_temp_mutes()
 
-# =========================================================
 # TASKS, PANELS, AND LOOPS
-# =========================================================
 async def update_member_count(guild: disnake.Guild):
     try:
         config = load_welcome_config()
@@ -775,42 +686,37 @@ async def update_member_count(guild: disnake.Guild):
             if channel.name != new_name: await channel.edit(name=new_name)
     except Exception as e: print(f"❌ Error updating member counter: {e}")
 
-async def deploy_rules():
-    if not build_languages or not RulesView: return
-    config = load_rules_config()
-    for name, data in config.items():
-        try:
-            channel_id, text = data.get("channel_id"), data.get("text")
-            if not channel_id or not text: continue
-            channel = bot.get_channel(channel_id) or await bot.fetch_channel(channel_id)
-            pages = build_languages(text)
-            if not pages: continue
-            view = RulesView(pages)
-            bot.add_view(view)
-            message_id = data.get("message_id")
-            restored = False
-            if message_id:
-                try:
-                    msg = await channel.fetch_message(message_id)
-                    await msg.edit(embed=view.get_embed(lang="ua", page=0), view=view)
-                    restored = True
-                except disnake.NotFound: pass
-            if not restored:
-                msg = await channel.send(embed=view.get_embed(lang="ua", page=0), view=view)
-                data["message_id"] = msg.id
-        except Exception as e: print(f"❌ Deploy rules error [{name}]: {e}")
-    save_rules_config(config)
-
+# Оновлення/створення повідомлення ролей для реакцій
 async def ensure_role_panel(guild):
+    global ROLE_PANEL_MESSAGE_ID
     ch = guild.get_channel(ROLE_PANEL_CHANNEL_ID)
     if not ch: return
-    try: msg = await ch.fetch_message(ROLE_PANEL_MESSAGE_ID)
-    except Exception: return
+    
     lines = ["Натисни реакцію щоб отримати або зняти роль:\n"]
     for eid in REACTION_ROLE_MAP:
         emoji = bot.get_emoji(eid)
         if emoji: lines.append(f"{emoji} — {REACTION_ROLE_TEXT[eid]}")
-    await msg.edit(content="\n".join(lines))
+    content_text = "\n".join(lines)
+
+    msg = None
+    try: 
+        msg = await ch.fetch_message(ROLE_PANEL_MESSAGE_ID)
+    except Exception:
+        # Если старое сообщение не найдено — создаем новое в указанном канале
+        try:
+            msg = await ch.send(content=content_text)
+            ROLE_PANEL_MESSAGE_ID = msg.id
+            print(f"✅ Создано новое сообщение ролей с ID: {ROLE_PANEL_MESSAGE_ID}")
+            for eid in REACTION_ROLE_MAP:
+                emoji = bot.get_emoji(eid)
+                if emoji: await msg.add_reaction(emoji)
+            return
+        except Exception as e:
+            print(f"❌ Помилка створення повідомлення ролей: {e}")
+            return
+
+    if msg:
+        await msg.edit(content=content_text)
 
 async def ensure_dashboard(guild):
     ch = guild.get_channel(ROLES_DASHBOARD_CHANNEL_ID)
@@ -876,10 +782,7 @@ async def check_temp_mutes():
                 temp_mutes.pop(uid, None)
                 save_temp_mutes()
         await asyncio.sleep(30)
-
-# =========================================================
-# GLOBAL EVENTS (UNIFIED)
-# =========================================================
+        # GLOBAL EVENTS
 @bot.event
 async def on_message(message: disnake.Message):
     if message.author.bot or not message.guild: return
@@ -936,6 +839,7 @@ async def on_member_join(member: disnake.Member):
 @bot.event
 async def on_member_remove(member: disnake.Member): await update_member_count(member.guild)
 
+# Подсчет XP в голосовых/временных голосовых каналах
 @bot.event
 async def on_voice_state_update(member: disnake.Member, before: disnake.VoiceState, after: disnake.VoiceState):
     if member.bot: return
@@ -945,6 +849,7 @@ async def on_voice_state_update(member: disnake.Member, before: disnake.VoiceSta
     elif after.channel is None and before.channel is not None:
         join_time = voice_connected_users.pop(user_id, None)
         if join_time:
+            # Каждые 5 минут нахождения дают 15 XP
             intervals = int(((time.time() - join_time) / 60) / 5)
             if intervals > 0: add_user_xp(str(user_id), intervals * 15)
 
@@ -975,9 +880,7 @@ async def case_buttons(inter):
     await msg.edit(embed=embed, view=view)
     await inter.response.defer()
 
-# =========================================================
 # SLASH COMMANDS
-# =========================================================
 @bot.slash_command(description="Бан користувача")
 async def ban(inter: disnake.ApplicationCommandInteraction, member: disnake.Member, hours: int, правило: str = "Порушення"):
     await inter.response.defer(ephemeral=True)
@@ -1016,8 +919,26 @@ async def warn(inter: disnake.ApplicationCommandInteraction, member: disnake.Mem
     await apply_warn(inter.guild, member, inter.author, причина, inter.channel)
     await inter.edit_original_message("☸ Пред видано.")
 
-@bot.slash_command(name="звернення")
-async def ticket(inter): await inter.response.send_message("Обери тип", view=TicketView(), ephemeral=True)
+# Новая команда для снятия предпреждений/варнов
+@bot.slash_command(description="Скинути попередження користувачу")
+async def unwarn(inter: disnake.ApplicationCommandInteraction, member: disnake.Member, кількість: int = 1):
+    await inter.response.defer(ephemeral=True)
+    if not can_mute(inter.author): return await inter.edit_original_message("❌ Бракує прав.")
+    
+    current = badword_tracker.get(member.id, 0)
+    if current == 0:
+        return await inter.edit_original_message("ℹ️ У користувача немає попереджень.")
+    
+    new_count = max(0, current - кількість)
+    badword_tracker[member.id] = new_count
+    save_warns()
+    
+    await inter.edit_original_message(f"✅ Скинуто **{кількість}** пред(ів) для {member.mention}. Поточний рахунок: **{new_count}/3**.")
+
+# Исправленная функция /звернення
+@bot.slash_command(name="звернення", description="Створити скаргу")
+async def ticket(inter: disnake.ApplicationCommandInteraction): 
+    await inter.response.send_modal(ComplaintModal())
 
 @bot.slash_command(name="user", description="Посмотреть профиль участника")
 async def user_slash(inter: disnake.ApplicationCommandInteraction, member: disnake.Member = None):
@@ -1044,9 +965,7 @@ async def top_slash(inter: disnake.ApplicationCommandInteraction):
         await inter.edit_original_message(embed=embed, file=leaderboard_file)
     else: await inter.edit_original_message("❌ Ошибка генерации.")
 
-# =========================================================
 # ON READY & BOT START
-# =========================================================
 @bot.event
 async def on_ready():
     global _bg_started
@@ -1076,9 +995,6 @@ async def on_ready():
                 for member in getattr(vc, "members", []):
                     if not member.bot: voice_connected_users[member.id] = time.time()
         except Exception as e: print(f"Guild init error: {e}")
-
-    try: await deploy_rules()
-    except Exception as e: print(f"Deploy rules error: {e}")
 
 if __name__ == "__main__":
     bot.run(TOKEN)

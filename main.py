@@ -569,20 +569,39 @@ class ComplaintModal(disnake.ui.Modal):
             disnake.ui.TextInput(label="Час", custom_id="time"),
             disnake.ui.TextInput(label="Опис", custom_id="desc", style=disnake.TextInputStyle.paragraph),
         ])
-    async def callback(self, inter):
-        ch = inter.guild.get_channel(COMPLAINTS_CHANNEL_ID)
-        pings = " ".join([f"<@&{r}>" for r in COMPLAINT_PING_ROLE_IDS])
-        embed = build_embed(inter, "Скарга на Учасника", {
-            "Порушник": self.text_values["user"], "Правило": self.text_values["rule"],
-            "Час": self.text_values["time"], "Опис": self.text_values["desc"]
-        })
-        msg = await ch.send(content=f"🔔 **Нове звернення:** {pings}", embed=embed)
-        thread = await msg.create_thread(name=f"Скарга #{msg.id}", auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES)
-        await thread.send("❦ Додайте докази тут")
-        STATE["cases"][str(msg.id)] = {"status": "open", "thread": thread.id}
-        save_state(STATE)
-        await msg.edit(view=build_case_view(msg.id))
-        await inter.response.send_message("Створено", ephemeral=True)
+
+    async def callback(self, inter: disnake.ModalInteraction):
+        # 1. Сразу подтверждаем получение данных, чтобы Discord не выдавал ошибку "Щось пішло не так"
+        await inter.response.defer(ephemeral=True)
+
+        try:
+            ch = inter.guild.get_channel(COMPLAINTS_CHANNEL_ID) or await bot.fetch_channel(COMPLAINTS_CHANNEL_ID)
+            if not ch:
+                return await inter.edit_original_message(content="❌ Канал скарг не знайдено.")
+
+            pings = " ".join([f"<@&{r}>" for r in COMPLAINT_PING_ROLE_IDS])
+            embed = build_embed(inter, "Скарга на Учасника", {
+                "Порушник": self.text_values["користувач"], 
+                "Правило": self.text_values["правило"],
+                "Час": self.text_values["час"], 
+                "Опис": self.text_values["опис"]
+            })
+
+            msg = await ch.send(content=f"🔔 **Нове звернення:** {pings}", embed=embed)
+            thread = await msg.create_thread(name=f"Скарга #{msg.id}", auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES)
+            await thread.send("❦ Додайте докази тут")
+
+            STATE["cases"][str(msg.id)] = {"status": "open", "thread": thread.id}
+            save_state(STATE)
+
+            await msg.edit(view=build_case_view(msg.id))
+            
+            # 2. Уведомляем пользователя об успешном отправлении
+            await inter.edit_original_message(content="✅ Скаргу успішно створено!")
+
+        except Exception as e:
+            print(f"❌ Помилка обробки скарги: {e}")
+            await inter.edit_original_message(content=f"❌ Сталася помилка при створенні скарги: {e}")
         # =========================================================
 # ЧАСТЬ 3: Обработка Реакций, Модерация и Циклы
 # =========================================================

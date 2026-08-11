@@ -44,6 +44,7 @@ DASHBOARD_MESSAGE_ID = 1488292186759106581
 MUTED_ROLE_ID = 1498451422939840825
 BLOCK_ROLE_ID = 1463693317047844956
 AUTO_ROLE_ID = 1443413500016853174
+MINOR_ROLE_ID = 1492193333723009195
 
 MUTE_ROLE_IDS = [1463676866857664663, 1429300139930947805, 1463733343689375927, 1429300518920126514, 1429301055774134404]
 BAN_ROLE_IDS = [1429300139930947805, 1463676866857664663]
@@ -76,11 +77,10 @@ BAD_WORDS = ["!г¡л"]
 
 REACTION_ROLE_MAP = {
     1485116638578872422: 1460718308788535328, # Сповіщення про Івенти
-    1431835098424279151: 1536787108415541318, # SFW / Мінор
+    1431835098424279151: 1536787108415541318, # SFW
     1429286343510458388: 1536786968170725437, # NSFW
     1487154187770007623: 1470140921218859235, # Furry gay NSFW
 }
-MINOR_ROLE_ID = 1492193333723009195
 
 REACTION_ROLE_TEXT = {
     1485116638578872422: "Сповіщення про Івенти",
@@ -88,11 +88,11 @@ REACTION_ROLE_TEXT = {
     1429286343510458388: "NSFW",
     1487154187770007623: "Furry gay NSFW",
 }
-# NSFW-роли для проверки
+
 NSFW_ROLE_IDS = {1536786968170725437, 1470140921218859235}
 
 WELCOME_TEXTS = {
-    "uk": "Привіт, {mention}! Тобі точно сподобається у **Whale Zen**. Ми створили затишний куточок без токсичності для фанатів аніме та ігор. Заходь ділитися контентом, шукати однодумців та просто спілкуватися про своє. Чекаємо саме на тебе!",
+    "uk": "Привіт, {mention}! Тобі точно сподобається у **Whale Zen**. Ми створили затишний куточок без токсичності для фанатів аніме та ігор. Заходь ділитися контентом, шукати однодумців та просто спілкуватися про своє. Чекаємо саме на тебе!"
 }
 
 # BOT INITIALIZATION
@@ -212,7 +212,11 @@ def channel_display(channel) -> str:
         parent = f" / {channel.parent.mention}" if channel.parent else ""
         return f"{channel.mention}{parent}\n`{channel.id}`"
     return f"{getattr(channel, 'mention', str(channel))}\n`{getattr(channel, 'id', 'unknown')}`"
-    # LOGGING
+    # =========================================================
+# ЧАСТЬ 2: Логирование, Система Опыта и Генерация Карточек
+# =========================================================
+
+# LOGGING
 async def _get_text_channel(channel_id: int, guild: disnake.Guild) -> disnake.TextChannel | disnake.Thread | None:
     cached = guild.get_channel(channel_id)
     if isinstance(cached, (disnake.TextChannel, disnake.Thread)): return cached
@@ -298,7 +302,7 @@ def get_safe_font(font_path, size):
         except IOError: continue
     return ImageFont.load_default()
 
-# ОБНОВЛЕННЫЙ ШАГ ОПЫТА: 150 * lvl + 100
+# Формула расчета XP: 100 + (level * 150)
 def calculate_xp_for_next_level(level): return 100 + (level * 150)
 
 def add_user_xp(user_id: str, amount: int):
@@ -306,17 +310,11 @@ def add_user_xp(user_id: str, amount: int):
     if user_id not in profiles: profiles[user_id] = {"xp": 0, "level": 1}
     profiles[user_id]["xp"] += amount
     
-    iterations = 0
-    while iterations < 1000:
-        current_xp = profiles[user_id]["xp"]
-        current_lvl = profiles[user_id]["level"]
-        xp_needed = calculate_xp_for_next_level(current_lvl)
-        if xp_needed <= 0: break
-        if current_xp >= xp_needed:
-            profiles[user_id]["level"] += 1
-            profiles[user_id]["xp"] = current_xp - xp_needed
-            iterations += 1
-        else: break
+    # Безопасный подсчет уровней без зацикливания
+    while profiles[user_id]["xp"] >= calculate_xp_for_next_level(profiles[user_id]["level"]):
+        profiles[user_id]["xp"] -= calculate_xp_for_next_level(profiles[user_id]["level"])
+        profiles[user_id]["level"] += 1
+
     save_profile_data(profiles)
 
 async def generate_welcome_image(member: disnake.Member):
@@ -585,7 +583,11 @@ class ComplaintModal(disnake.ui.Modal):
         save_state(STATE)
         await msg.edit(view=build_case_view(msg.id))
         await inter.response.send_message("Створено", ephemeral=True)
-  # REACTION ROLE HANDLER
+        # =========================================================
+# ЧАСТЬ 3: Обработка Реакций, Модерация и Циклы
+# =========================================================
+
+# REACTION ROLE HANDLER
 async def handle_reaction(payload, add: bool):
     guild = bot.get_guild(payload.guild_id)
     if not guild or payload.message_id != ROLE_PANEL_MESSAGE_ID: return
@@ -707,7 +709,6 @@ async def ensure_role_panel(guild):
     try: 
         msg = await ch.fetch_message(ROLE_PANEL_MESSAGE_ID)
     except Exception:
-        # Если старое сообщение не найдено — создаем новое в указанном канале
         try:
             msg = await ch.send(content=content_text)
             ROLE_PANEL_MESSAGE_ID = msg.id
@@ -787,7 +788,11 @@ async def check_temp_mutes():
                 temp_mutes.pop(uid, None)
                 save_temp_mutes()
         await asyncio.sleep(30)
-        # GLOBAL EVENTS
+        # =========================================================
+# ЧАСТЬ 4: Глобальные События, Слеш-Команды и Запуск
+# =========================================================
+
+# GLOBAL EVENTS
 @bot.event
 async def on_message(message: disnake.Message):
     if message.author.bot or not message.guild: return
@@ -836,7 +841,7 @@ async def on_member_join(member: disnake.Member):
         if not channel_id: return
         channel = bot.get_channel(channel_id) or await bot.fetch_channel(channel_id)
         img = await generate_welcome_image(member)
-        final_text = f"{WELCOME_TEXTS['uk'].format(mention=member.mention)}\n\n{WELCOME_TEXTS['en'].format(mention=member.mention)}\n\n{WELCOME_TEXTS['ru'].format(mention=member.mention)}"
+        final_text = WELCOME_TEXTS["uk"].format(mention=member.mention)
         if img: await channel.send(content=final_text, file=img)
         else: await channel.send(content=final_text)
     except Exception as e: print(f"❌ Error on_member_join: {e}")
@@ -854,7 +859,7 @@ async def on_voice_state_update(member: disnake.Member, before: disnake.VoiceSta
     elif after.channel is None and before.channel is not None:
         join_time = voice_connected_users.pop(user_id, None)
         if join_time:
-            # Каждые 5 минут нахождения дают 15 XP
+            # Каждые 5 минут нахождения дают 75 XP
             intervals = int(((time.time() - join_time) / 60) / 5)
             if intervals > 0: add_user_xp(str(user_id), intervals * 75)
 
@@ -924,7 +929,7 @@ async def warn(inter: disnake.ApplicationCommandInteraction, member: disnake.Mem
     await apply_warn(inter.guild, member, inter.author, причина, inter.channel)
     await inter.edit_original_message("☸ Пред видано.")
 
-# Новая команда для снятия предпреждений/варнов
+# Команда для снятия предупреждений/варнов
 @bot.slash_command(description="Скинути попередження користувачу")
 async def unwarn(inter: disnake.ApplicationCommandInteraction, member: disnake.Member, кількість: int = 1):
     await inter.response.defer(ephemeral=True)
@@ -940,7 +945,7 @@ async def unwarn(inter: disnake.ApplicationCommandInteraction, member: disnake.M
     
     await inter.edit_original_message(f"✅ Скинуто **{кількість}** пред(ів) для {member.mention}. Поточний рахунок: **{new_count}/3**.")
 
-# Исправленная функция /звернення
+# Функция /звернення (сразу открывает модальное окно скарги)
 @bot.slash_command(name="звернення", description="Створити скаргу")
 async def ticket(inter: disnake.ApplicationCommandInteraction): 
     await inter.response.send_modal(ComplaintModal())

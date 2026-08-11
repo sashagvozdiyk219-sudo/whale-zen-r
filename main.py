@@ -1002,10 +1002,10 @@ async def on_ready():
     bot.add_view(ClearWarnView())
 
     load_state()
-    try:
-        synced = await bot.sync_commands()
-        print(f"🔁 Synced commands: {len(synced)}")
-    except Exception as e: print(f"Sync error: {e}")
+    # try:
+        # synced = await bot.sync_commands()
+       # print(f"🔁 Synced commands: {len(synced)}")
+    # except Exception as e: print(f"Sync error: {e}")
 
     print(f"=== READY === bot={bot.user}")
 

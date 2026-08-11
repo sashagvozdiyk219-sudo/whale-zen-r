@@ -571,7 +571,6 @@ class ComplaintModal(disnake.ui.Modal):
         ])
 
     async def callback(self, inter: disnake.ModalInteraction):
-        # 1. Сразу подтверждаем получение данных, чтобы Discord не выдавал ошибку "Щось пішло не так"
         await inter.response.defer(ephemeral=True)
 
         try:
@@ -580,11 +579,13 @@ class ComplaintModal(disnake.ui.Modal):
                 return await inter.edit_original_message(content="❌ Канал скарг не знайдено.")
 
             pings = " ".join([f"<@&{r}>" for r in COMPLAINT_PING_ROLE_IDS])
+            
+            # Используем inter.text_values вместо self.text_values
             embed = build_embed(inter, "Скарга на Учасника", {
-                "Порушник": self.text_values["користувач"], 
-                "Правило": self.text_values["правило"],
-                "Час": self.text_values["час"], 
-                "Опис": self.text_values["опис"]
+                "Порушник": inter.text_values["user"], 
+                "Правило": inter.text_values["rule"],
+                "Час": inter.text_values["time"], 
+                "Опис": inter.text_values["desc"]
             })
 
             msg = await ch.send(content=f"🔔 **Нове звернення:** {pings}", embed=embed)
@@ -595,14 +596,12 @@ class ComplaintModal(disnake.ui.Modal):
             save_state(STATE)
 
             await msg.edit(view=build_case_view(msg.id))
-            
-            # 2. Уведомляем пользователя об успешном отправлении
             await inter.edit_original_message(content="✅ Скаргу успішно створено!")
 
         except Exception as e:
             print(f"❌ Помилка обробки скарги: {e}")
             await inter.edit_original_message(content=f"❌ Сталася помилка при створенні скарги: {e}")
-        # =========================================================
+ # =========================================================
 # ЧАСТЬ 3: Обработка Реакций, Модерация и Циклы
 # =========================================================
 

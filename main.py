@@ -851,7 +851,7 @@ async def on_voice_state_update(member: disnake.Member, before: disnake.VoiceSta
         if join_time:
             # Каждые 5 минут нахождения дают 15 XP
             intervals = int(((time.time() - join_time) / 60) / 5)
-            if intervals > 0: add_user_xp(str(user_id), intervals * 15)
+            if intervals > 0: add_user_xp(str(user_id), intervals * 75)
 
 @bot.listen("on_button_click")
 async def case_buttons(inter):
